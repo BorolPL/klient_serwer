@@ -1,78 +1,82 @@
-/************* UDP CLIENT CODE *******************/
+/*
+    Simple udp client
+*/
+#include<stdio.h> 				//printf
+#include<string.h> 				//memset
+#include<stdlib.h> 				//exit(0);
+#include<arpa/inet.h>
+#include<sys/socket.h>
 
-#include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <stdlib.h>
 
-char dod[] = "dodawanie";
-char mno[] = "mnozenie";
-char odej[] = "odejmowanie";
-char dzie[] = "dzielenie";
-double operacja;
-int er;
+#define BUFLEN 64  				//Maksymalna dlugosc bufora
+#define PORT 666    			//Wybor portu
 
-int main(int argc, char* argv[]) {
-	int clientSocket = 0;
-	int nBytes;
+void die(char *s) //obsluga bledow
+{
+    perror(s);
+    exit(1);
+}
 
-	double buffer[1024];
-	double wynik;
 
-	struct sockaddr_in serverAddr;
-	socklen_t addr_size;
+int main(int argc, char **argv)
+{
+	//>>wskaznik na zmienne
+	char *server;
+	//<<
 
-	/*Create UDP socket*/
-	clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in si_other;
+    int s, slen=sizeof(si_other);
+    char buf[BUFLEN];
+    char message[BUFLEN];
 
-	/*Configure settings in address struct*/
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(7891);
-	serverAddr.sin_addr.s_addr = inet_addr("192.168.119.16");
-	memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
+    server = argv[4];
 
-	/*Initialize size variable to be used later on*/
-	addr_size = sizeof(serverAddr);
+    //Wyswietlanie danych
+    printf("\n\rWczytane parametry: \n\r");
+    printf("\n\rZmienna A: %s" 		, argv[1]);
+    printf("\n\rZmienna B: %s" 		, argv[2]);
+    printf("\n\rOperacja  : %s"  	, argv[3]);
+    printf("\n\rADR SERWERA : %s \n\r" , argv[4]); //tutaj localhost wpisywac
 
-	if (strcmp(dod, argv[3]) == 0) {
-		operacja = 1.0;
-	}
-	if (strcmp(odej, argv[3]) == 0) {
-		operacja = 2.0;
-	}
-	if (strcmp(mno, argv[3]) == 0) {
-		operacja = 3.0;
-	}
-	if (strcmp(dzie, argv[3]) == 0) {
-		operacja = 4.0;
-	}
-	printf("Podane argumenty: %s %s %s\n", argv[1], argv[2], argv[3]);
+    //Umieszczenie zmiennych w payloadzie
+    sprintf(message , "%s %s %s" , argv[1] , argv[2] , argv[3]);
 
-	buffer[0] = atof(argv[1]);
-	buffer[1] = atof(argv[2]);
-	buffer[2] = operacja;
+    //Tworzenie gniazda
+    if ( (s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    {
+        die("socket");
+    }
 
-//while(1){
+    memset((char *) &si_other, 0, sizeof(si_other));
+    si_other.sin_family = AF_INET;
+    si_other.sin_port = htons(PORT);
 
-	/*Send message to server*/
-	er = sendto(clientSocket, buffer, sizeof(buffer), 0,
-			(struct sockaddr *) &serverAddr, addr_size);
-	if(er==-1){
-		perror( "sendto() ERROR" );		//kontrola b³êdów
-		exit( - 1 );
-	}
+    if (inet_aton(server , &si_other.sin_addr) == 0)			//inte_aton konwertuje adres IP na binerne dane i laduje do struktury in_adr
+    {
+        fprintf(stderr, "inet_aton() failed\n");
+        exit(1);
+    }
 
-	/*Receive message from server*/
-	nBytes = recvfrom(clientSocket, &wynik, sizeof(wynik), 0, NULL, NULL);
-	if(nBytes==-1){
-			perror( "recvfrom() ERROR" );
-			exit( - 1 );
-		}
-	printf("Wynik operacji arytmetycznej: %.3f \n", wynik);
+    //wyslanie datagramu
+    if (sendto(s, message, strlen(message) , 0 , (struct sockaddr *) &si_other, slen)==-1)
+    {
+        die("sendto()");
+    }
 
-	close(clientSocket);
-//}
+    printf("\n\rWait for server..."); //czekanie na odpowiedz
 
-	return 0;
+    //otrzymuje i wypisuje
+    //czyszczenie bufora zerem
+    memset(buf,'\0', BUFLEN);
+
+    //blokowanie petli
+    if (recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *) &si_other, &slen) == -1)
+    {
+        die("recvfrom()");
+    }
+
+    printf("\n\rResponse:\n\r%s", buf);
+
+    close(s);
+    return 0;
 }
